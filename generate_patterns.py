@@ -6,13 +6,18 @@ theta_range = np.pi  # Section of annulus
 deflection = 5 # degrees
 thk = 1.016
 
+def count_cols(path):
+    flat_c = [x for v in path for x in v][1::2]
+    cols = np.max(flat_c)+1
+    return cols
+
 if __name__ == "__main__":
     # Lets make a spring!
-    # TO do this we are going to divide our annulus into a grid withg rows and columsn
+    # To do this we are going to divide our annulus into a grid with rows and colums
     # We'll treat rows as a parameter
-    rows = 4
+    rows = 3
     # and search a reasonable range of columns
-    col_passes = list(range(4,10,1))
+    col_passes = list(range(5,15,1))
     # what we want is a set of unique usable paths to look at
     usable_paths = set()
     # and eventually physical plots for each curve
@@ -40,8 +45,8 @@ if __name__ == "__main__":
                     if count_poles(path)==cols:
                         # [(1,0),(1,0),(0,1),(-1,0),(-1,0)]
                         # path_to_dirs(c_path)
-                        # if not (any(path_to_dirs(c_path)[i : i + len([(1,0),(1,0),(0,1),(-1,0),(-1,0)])] == [(1,0),(1,0),(0,1),(-1,0),(-1,0)]
-                        #         for i in range(len(path_to_dirs(c_path)) - len([(1,0),(1,0),(0,1),(-1,0),(-1,0)]) + 1))):
+                        if not (any(path_to_dirs(c_path)[i : i + len([(1,0),(1,0),(0,1),(-1,0),(-1,0)])] == [(1,0),(1,0),(0,1),(-1,0),(-1,0)]
+                                for i in range(len(path_to_dirs(c_path)) - len([(1,0),(1,0),(0,1),(-1,0),(-1,0)]) + 1))):
                             # print("got here")
                             # but ultimately we only use symmetric paths with an amoutn of poles equal to the amount of columns
                             # and we skip vertical switchbacks because they aren't useful
@@ -51,36 +56,64 @@ if __name__ == "__main__":
         # for every usable path, we are going to want to try to make it in an annulus
     print(f"found {len(usable_paths)} usable paths")
     # print("done with first for loop")
+    overall_best_arc = 0
+    overall_best_grouping = []
+    overall_best_path = []
+    # overall_best = {}
     for path in usable_paths:
-        # print(f"trying path {path}")
+        print("--")
         # we will see how we can group the poles together, and then pick the version that gives us the best arc length on
         # the perpendicular segments:
         # print(path, count_poles(path))
-        flat_c = [x for v in path for x in v][1::2]
-        cols = np.max(flat_c)+1
-        annularGrid = nx.grid_2d_graph(rows, cols)
-        plot_path_on_grid(path, annularGrid, color='blue')
-        print(path)
+        # flat_c = [x for v in path for x in v][1::2]
+        # cols = np.max(flat_c)+1
+        # annularGrid = nx.grid_2d_graph(rows, cols)
+        # plot_path_on_grid(path, annularGrid, color='blue')
+        print(f"For this path: {path}")
 
         groupings = generate_all_groupings(path)
         best_arc = 0
         best_grouping = None
         for grouping in groupings:
-            arc_len = arc_len_objective(path, rows, thk, theta_range, deflection, r_outer, r_inner, grouping)
+            arc_objective = arc_len_objective(path, rows, thk, theta_range, deflection, r_outer, r_inner, grouping)
+            flexure_length = measure_arc_len(path, rows, thk, theta_range, deflection, r_outer, r_inner, grouping   )
             # print(grouping, arc_len)
-            if arc_len >= best_arc:
-                best_arc = arc_len
+            if arc_objective >= best_arc:
+                best_arc = arc_objective
                 best_grouping = grouping
-        print(f"BEST ONE for path: ^^")
-        print(best_grouping, best_arc)
+            if flexure_length >= overall_best_arc:
+                overall_best_arc = flexure_length
+                overall_best_grouping = grouping
+                overall_best_path = path
+        print(f"The best grouping is {best_grouping}")
+        print(f"Which gives a total flexure length of {best_arc}")
+        # print(, best_arc)
         cartesian_points = polar_to_cartesian_path(*get_polar_coords(path, rows, thk, theta_range, deflection, r_outer, r_inner, best_grouping), thk, theta_range)
-        # and we'll save it in an array that contains (hopefully) all the information we need to plot it in solidworks
+        # and we'll save it in an array that contains (hopefully) all the information we need to plot it in solidworks (EVENTUALLY)
         plots.append([cartesian_points, (rows, count_poles(path)), grouping])
         # with open('plots.txt', 'w') as f:
         #     for item in [cartesian_points, (rows, count_poles(path)), grouping]:
         #         print(item, file=f)
     # hooray! we're done. lets print it all out to make sure we're not an idiot
     # print(plots)
+    overall_best = {'path':     overall_best_path,
+                    'grouping': overall_best_grouping,
+                    'flex_len': overall_best_arc}
+    for path in usable_paths:
+        cols = count_cols(path)
+        annularGrid = nx.grid_2d_graph(rows, cols)
+        # plot_path_on_grid(path, annularGrid, color='blue')
+        if overall_best['path'] == path:
+            plot_path_on_grid(path, annularGrid, color='blue')
+        else:
+            plot_path_on_grid(path, annularGrid, color='red')
+
+    # flat_c = [x for v in path for x in v][1::2]
+    # cols = np.max(flat_c)+1
+    print(f"The best path was {overall_best['path']} with {count_cols(overall_best['path'])} columns")
+    print(f"It was grouped like {overall_best['grouping']} and has a flexure length of {overall_best['flex_len']}")
+    print(f"This arc len is {overall_best['flex_len']/(r_outer-r_inner)} times the annular width. Pretty solid.")
+    print(f"my ass is grass")
 
     # close that shit
     from matplotlib.widgets import Button
@@ -88,6 +121,14 @@ if __name__ == "__main__":
     fig = plt.figure(figsize=(3,1))
     ax_button = plt.axes([0.3, 0.4, 0.4, 0.2])  # [left, bottom, width, height]
     button = Button(ax_button, 'Close all', color='red', hovercolor='tomato')
+    # # Get the window manager and pull the window to the front
+    # wm = plt.get_current_fig_manager()
+    # wm.window.attributes('-topmost', True)  # Stay on top
+    # wm.window.attributes('-topmost', False) # Let other windows take focus again
+    # Force Qt window to the foreground
+    # wm = plt.get_current_fig_manager()
+    # wm.window.activateWindow()
+    # wm.window.raise_()
 
     def close_all(event):
         plt.close('all')

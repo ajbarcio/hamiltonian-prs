@@ -288,7 +288,15 @@ def polar_to_cartesian_path(angles, radii, thk, theta_range):
     return path
 
 def arc_len_objective(path, rows, thk, theta_range, deflection, r_outer, r_inner, groupdef):
-    angles, a_radii =get_polar_coords(path, rows, thk, theta_range, deflection, r_outer, r_inner, groupdef)
+    arc_lens = measure_arc_lens(path, rows, thk, theta_range, deflection, r_outer, r_inner, groupdef)
+    
+    # return np.sum(arc_lens)       # to maximize the total arc
+    # return np.max(arc_lens)           # to maximize biggest arc
+    return np.min(arc_lens) # maximize shortest arc (bro you're a moron you should have been doing this from the start)
+    # return np.average(arc_lens) # to maximize average arc
+
+def measure_arc_lens(path, rows, thk, theta_range, deflection, r_outer, r_inner, groupdef):
+    angles, a_radii = get_polar_coords(path, rows, thk, theta_range, deflection, r_outer, r_inner, groupdef)
     # print(simplified_path(path))
     dirs = path_to_dirs(simplified_path(path))
     # print(dirs)
@@ -300,10 +308,14 @@ def arc_len_objective(path, rows, thk, theta_range, deflection, r_outer, r_inner
         if dirs[i][0] == 0:
             arc_lens.append(a_radii[i]*abs(angles[i+1]-angles[i]))
             assert a_radii[i]==a_radii[i+1]
-    # return np.sum(arc_lens)       # to maximize the total arc
-    # return np.max(arc_lens)           # to maximize biggest arc
-    return np.min(arc_lens) # maximize shortest arc (bro you're a moron you should have been doing this from the start)
-    # return np.average(arc_lens) # to maximize average arc
+    return arc_lens
+
+def measure_arc_len(path, rows, thk, theta_range, deflection, r_outer, r_inner, groupdef):
+    arc_lens = measure_arc_lens(path, rows, thk, theta_range, deflection, r_outer, r_inner, groupdef)
+    return sum(arc_lens)
+
+def plot_on_annulus(path, rows, thk, theta_range, deflection, outer_radius, inner_radius, groupdef):
+    pass
 
 if __name__ == "__main__":
     # 5 poles (1-central)
@@ -349,10 +361,10 @@ if __name__ == "__main__":
     best_grouping = None
     for grouping in groupings:
 
-        arc_len = arc_len_objective(path, rows, thk, theta_range, deflection, r_outer, r_inner, grouping)
-        print(grouping, arc_len)
-        if arc_len >= best_arc:
-            best_arc = arc_len
+        arc_objective = arc_len_objective(path, rows, thk, theta_range, deflection, r_outer, r_inner, grouping)
+        print(grouping, arc_objective)
+        if arc_objective >= best_arc:
+            best_arc = arc_objective
             best_grouping = grouping
             # print("LATEST BEST ARC/PATH")
     print("BEST ONE:")
